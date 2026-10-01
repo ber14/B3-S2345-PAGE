@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <title>סימולטור אוטומט תאי B3/S23456</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            background-color: #1a1a1a;
+            color: #ffffff;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            margin: 0;
+        }
+        h1 { margin-bottom: 5px; color: #4ade80; }
+        .info { color: #a3a3a3; margin-bottom: 20px; font-size: 14px; }
+        #canvas-container {
+            position: relative;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+            border-radius: 8px;
+            overflow: hidden;
+            background: #111;
+        }
+        canvas { display: block; cursor: pointer; }
+        .controls {
+            margin-top: 20px;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        button {
+            background-color: #2b2b2b;
+            color: white;
+            border: 1px solid #444;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.2s;
+        }
+        button:hover { background-color: #3b3b3b; border-color: #666; }
+        button#startStop.running { background-color: #ef4444; border-color: #f87171; }
+        button#startStop.stopped { background-color: #22c55e; border-color: #4ade80; }
+        .stats { margin-top: 15px; font-size: 16px; color: #e5e5e5; }
+    </style>
+</head>
+<body>
+
+    <h1>סימולטור B3/S23456</h1>
+    <div class="info">לידה (Birth): 3 שכנים | הישרדות (Survival): 2, 3, 4, 5, 6 שכנים</div>
+
+    <div id="canvas-container">
+        <canvas id="gridCanvas" width="600" height="400"></canvas>
+    </div>
+
+    <div class="controls">
+        <button id="startStop" class="stopped">הפעלה</button>
+        <button id="step">צעד בודד</button>
+        <button id="randomize">פיזור אקראי</button>
+        <button id="clear">ניקוי לוח</button>
+    </div>
+
+    <div class="stats">דור: <span id="generationCount">0</span></div>
+
+    <script>
+        const canvas = document.getElementById('gridCanvas');
+        const ctx = canvas.getContext('2d');
+        const startStopBtn = document.getElementById('startStop');
+        const stepBtn = document.getElementById('step');
+        const randomizeBtn = document.getElementById('randomize');
+        const clearBtn = document.getElementById('clear');
+        const genCountSpan = document.getElementById('generationCount');
+
+        const CELL_SIZE = 10;
+        const COLS = canvas.width / CELL_SIZE;
+        const ROWS = canvas.height / CELL_SIZE;
+
+        let grid = Array(ROWS).fill().map(() => Array(COLS).fill(0));
+        let isRunning = false;
+        let generation = 0;
+        let animationFrameId = null;
+
+        // ציור הלוח
+        function draw() {
+            ctx.fillStyle = '#111111';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            for (let r = 0; r < ROWS; r++) {
+                for (let c = 0; c < COLS; c++) {
+                    if (grid[r][c] === 1) {
+                        ctx.fillStyle = '#4ade80'; // תא חי
+                        ctx.fillRect(c * CELL_SIZE, r * CELL_SIZE, CELL_SIZE - 1, CELL_SIZE - 1);
+                    }
+                }
+            }
+            genCountSpan.textContent = generation;
+        }
+
+        // ספירת שכנים (מחזורי - טורוס)
+        function countNeighbors(r, c) {
+            let count = 0;
+            for (let i = -1; i <= 1; i++) {
+                for (let j = -1; j <= 1; j++) {
+                    if (i === 0 && j === 0) continue;
+                    let row = (r + i + ROWS) % ROWS;
+                    let col = (c + j + COLS) % COLS;
+                    count += grid[row][col];
+                }
+            }
+            return count;
+        }
+
+        // חישוב הדור הבא לפי חוק B3/S23456
+        function nextGeneration() {
+            let nextGrid = Array(ROWS).fill().map(() => Array(COLS).fill(0));
+
+            for (let r = 0; r < ROWS; r++) {
+                for (let c = 0; c < COLS; c++) {
+                    let neighbors = countNeighbors(r, c);
+
+                    if (grid[r][c] === 1) {
+                        // חוקי הישרדות (S23456)
+                        if (neighbors >= 2 && neighbors <= 6) {
+                            nextGrid[r][c] = 1;
+                        } else {
+                            nextGrid[r][c] = 0;
+                        }
+                    } else {
+                        // חוקי לידה (B3)
+                        if (neighbors === 3) {
+                            nextGrid[r][c] = 1;
+                        } else {
+                            nextGrid[r][c] = 0;
+                        }
+                    }
+                }
+            }
+            grid = nextGrid;
+            generation++;
+        }
+
+        // לולאת האנימציה
+        function tick() {
+            if (!isRunning) return;
+            nextGeneration();
+            draw();
+            setTimeout(() => {
+                animationFrameId = requestAnimationFrame(tick);
+            }, 80); // מהירות הריצה (במילישניות)
+        }
+
+        // אירועים וכפתורים
+        startStopBtn.addEventListener('click', () => {
+            isRunning = !isRunning;
+            if (isRunning) {
+                startStopBtn.textContent = 'עצירה';
+                startStopBtn.className = 'running';
+                tick();
+            } else {
+                startStopBtn.textContent = 'הפעלה';
+                startStopBtn.className = 'stopped';
+                cancelAnimationFrame(animationFrameId);
+            }
+        });
+
+        stepBtn.addEventListener('click', () => {
+            if (!isRunning) {
+                nextGeneration();
+                draw();
+            }
+        });
+
+        randomizeBtn.addEventListener('click', () => {
+            generation = 0;
+            for (let r = 0; r < ROWS; r++) {
+                for (let c = 0; c < COLS; c++) {
+                    grid[r][c] = Math.random() > 0.75 ? 1 : 0; // 25% סיכוי לתא חי בהתחלה
+                }
+            }
+            draw();
+        });
+
+        clearBtn.addEventListener('click', () => {
+            generation = 0;
+            grid = Array(ROWS).fill().map(() => Array(COLS).fill(0));
+            if (isRunning) startStopBtn.click();
+            draw();
+        });
+
+        // לחיצה על הקנבס לציור ידני
+        canvas.addEventListener('click', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            const c = Math.floor(x / CELL_SIZE);
+            const r = Math.floor(y / CELL_SIZE);
+            
+            if (r >= 0 && r < ROWS && c >= 0 && c < COLS) {
+                grid[r][c] = grid[r][c] === 1 ? 0 : 1;
+                draw();
+            }
+        });
+
+        // אתחול ראשוני עם מבנה אקראי
+        randomizeBtn.click();
+    </script>
+</body>
+</html>
